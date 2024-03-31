@@ -1,0 +1,131 @@
+/* Measurments Project 2
+ * project 2.1:
+ * water flow sensor (return frequency)
+ * 
+ * project 2.2:
+ * read the water flow sensor frequency and return the total volume and current water flow 
+ */
+#include <LiquidCrystal.h>
+#define FREQ_PIN_OUT A2
+#define FREQ_PIN_IN A3
+
+const int rs = 8, en = 9, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+// part 2.1
+int frequencies[] = { 20, 10, 50, 100, 70 };
+int timings[] = { 4, 3, 5, 6, 3 };
+unsigned long last_start_pulse = 0;
+unsigned long last_start_signal = 0;
+bool is_finished_timing = true;
+bool pulse_part = 0;
+int signal_number = 0;
+
+// part 2.2
+double total_volume = 0;
+double volume = 0;
+double Q = 0;
+
+boolean lastInputState = false;
+long interval_between_them = 0L;
+unsigned long previousCountMillis = millis();
+const long countMillis = 125L;
+long count = 0L;
+bool this_input_state = false;
+int this_frequency_read = 0;
+
+
+//return true if finished
+bool our_delay(unsigned long interval, unsigned long last_event) {
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - last_event >= interval)
+    return true;
+  return false;
+}
+
+//return true if finished
+bool generate_frequency_signal(int frequency, unsigned long interval) {
+  if (is_finished_timing) {
+    last_start_signal = millis();
+    last_start_pulse = millis();
+    is_finished_timing = false;
+    pulse_part = 0;
+  }
+
+  if (not our_delay(interval * 1000, last_start_signal)) {
+
+    if (pulse_part != 0)
+      ;
+    else if (not our_delay(1000 / (2 * frequency), last_start_pulse))  // millisecond / (half_cycle * frequency))
+      return false;
+    else {
+      last_start_pulse = millis();
+      pulse_part = 1;
+      digitalWrite(FREQ_PIN_OUT, HIGH);
+      this_input_state = 1;
+      //Serial.println(1);
+    }
+
+
+    if (not our_delay(1000 / (2 * frequency), last_start_pulse))  // millisecond / (half_cycle * frequency)
+      return false;
+    else {
+      last_start_pulse = millis();
+      pulse_part = 0;
+      digitalWrite(FREQ_PIN_OUT, LOW);
+      this_input_state = 0;
+      //Serial.println(0);
+    }
+  } else {
+    is_finished_timing = true;
+    return true;
+  }
+  return false;
+}
+
+void setup() {
+  pinMode(FREQ_PIN_OUT, OUTPUT);
+  pinMode(FREQ_PIN_IN, INPUT);
+  lcd.begin(16,2);
+  lcd.clear();
+  //Serial.begin(9600);
+}
+
+void loop() {
+  if (generate_frequency_signal(frequencies[signal_number], timings[signal_number])) {
+    volume = 0;
+    if (signal_number == 4) {
+      delay(5000);
+      signal_number = 0;
+    } else
+      signal_number += 1;
+  }
+
+  boolean inputState = digitalRead(FREQ_PIN_IN);
+  //boolean inputState = this_input_state;
+  if (inputState != lastInputState) {
+    count++;
+    lastInputState = inputState;
+  }
+
+  if (millis() - previousCountMillis >= countMillis) {
+    previousCountMillis += countMillis;
+    this_frequency_read = count * 4;
+    Q = this_frequency_read / 5.0;
+    volume += Q * (countMillis / 60.0);
+    total_volume += Q * (countMillis / 60.0);
+
+  
+    lcd.setCursor(0, 0);
+    lcd.print(volume);
+    // lcd.print("");
+    lcd.setCursor(0, 1);
+    lcd.print(total_volume);
+    // lcd.print(" mL");
+    lcd.setCursor(9, 0);
+    lcd.print(Q);
+    lcd.print(" LM");
+    count = 0L;
+  }
+}
